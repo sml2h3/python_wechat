@@ -24,6 +24,7 @@ class Login(object):
         self.check = "https://login.wx.qq.com/cgi-bin/mmwebwx-bin/login?loginicon=true&uuid={uuid}&tip=0&r=2073077620&_=1488280416522"
         self.jm = "http://jiema.wwei.cn/fileupload/index/op/jiema.html"
         self.baseinfo = "https://wx2.qq.com/cgi-bin/mmwebwx-bin/webwxinit?r=2056259748&lang=zh_CN&pass_ticket="
+        self.statusnotify = "https://wx2.qq.com/cgi-bin/mmwebwx-bin/webwxstatusnotify"
         self.info = {}
         self._run()
 
@@ -79,7 +80,6 @@ class Login(object):
                             url = self.redurl[0]
                             result = requests.get(url, allow_redirects=False)
                             real_cookies = result.cookies
-                            print result.text
                             for node in xml.dom.minidom.parseString(result.text).documentElement.childNodes:
                                 if len(node.childNodes) == 0:
                                     continue
@@ -117,21 +117,57 @@ class Login(object):
                                         "DeviceID": self.info['DeviceID']
                                     }
                                 })
+                                #初始化
                                 result = requests.post(self.baseinfo + self.info['pass_ticket'], cookies=real_cookies, headers=header, data=data)
                                 result.encoding = "utf-8"
-                                print result.text
+                                jresult = json.loads(result.text)
+                                if jresult['BaseResponse']['Ret'] == 0:
+                                    SyncKey = jresult['SyncKey']['List']
+                                    uin = jresult['User']['Uin']
+                                    username = jresult['User']['UserName']
+                                    skey = jresult['SKey']
+                                    data = {'BaseRequest': {
+                                            'Uin': uin,
+                                            'Sid': self.info['wxsid'],
+                                            'Skey': skey,
+                                            'DeviceID': 'e' + repr(random.random())[2:17]
+                                        },
+                                        'Code': 3,
+                                        'FromUserName': username,
+                                        'ToUserName': username,
+                                        'ClientMsgId': '1488531367081'
+                                    }
+                                    data = json.dumps(data)
+                                    result = requests.post(self.statusnotify, cookies=real_cookies, headers=header, data=data)
+                                    result.encoding = "utf-8"
+                                    reparam = {
+                                        'SyncKey':SyncKey,
+                                        'Uin': uin,
+                                        'Sid': self.info['wxsid'],
+                                        'Skey': skey,
+                                        'cookies': real_cookies,
+
+                                    }
+                                else:
+                                    self.logger.info('登录失败')
+                                    return False
                             else:
                                 return False
                         else:
                             self.logger.info('登录失败，可能是二维码已超时')
+                            return False
                     else:
                         self.logger.info('网络连接有问题，请检查后重试')
+                        return False
                 else:
                     self.logger.info('网络出错，请在github上给我发issue，我的github地址为https://github.com/sml2h3')
+                    return False
             else:
                 self.logger.info('网络连接有问题，请检查后重试')
+                return False
         else:
             self.logger.info('网络连接有问题，请检查后重试')
+            return False
 
 
 
